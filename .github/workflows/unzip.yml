@@ -1,8 +1,10 @@
 name: Auto Unzip File
+
 on:
   push:
     paths:
       - '**.zip'
+    # Hindari memicu workflow lagi dari hasil push sendiri
     branches-ignore:
       - 'main'
   workflow_dispatch:
@@ -12,27 +14,38 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      workflows: write   # Izin untuk mengubah file di .github/workflows/
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Unzip dan Commit
+
+      - name: Unzip dan Commit Hasil Ekstrak
         run: |
+          # Install unzip jika belum ada
           sudo apt-get install -y unzip
-          
-          # Cari semua file ZIP di semua subfolder
-          find . -name "*.zip" -type f | while read zip_file; do
+
+          # Cari semua file .zip di seluruh repositori
+          find . -name "*.zip" -type f | while IFS= read -r zip_file; do
             echo "Mengekstrak $zip_file ..."
             target_dir=$(dirname "$zip_file")
             if unzip -o "$zip_file" -d "$target_dir"; then
               rm "$zip_file"
+              echo "Berhasil mengekstrak dan menghapus $zip_file"
             else
-              echo "Gagal ekstrak $zip_file"
+              echo "Gagal mengekstrak $zip_file" >&2
               exit 1
             fi
           done
-          
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          
+
+          # Konfigurasi git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit dan push jika ada perubahan
           git add .
-          git commit -m "Auto extract ZIP [skip ci]" && git push origin HEAD:${{ github.ref_name }}
+          if git diff --staged --quiet; then
+            echo "Tidak ada perubahan untuk di-commit"
+          else
+            git commit -m "Auto extract ZIP [skip ci]"
+            git push origin HEAD:${GITHUB_REF#refs/heads/}
+          fi
