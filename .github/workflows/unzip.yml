@@ -4,9 +4,6 @@ on:
   push:
     paths:
       - '**.zip'
-    # Hindari memicu workflow lagi dari hasil push sendiri
-    branches-ignore:
-      - 'main'
   workflow_dispatch:
 
 jobs:
@@ -14,38 +11,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      workflows: write   # Izin untuk mengubah file di .github/workflows/
-
+      workflows: write
+    
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unzip dan Commit Hasil Ekstrak
-        run: |
-          # Install unzip jika belum ada
-          sudo apt-get install -y unzip
+      - name: Install unzip
+        run: sudo apt-get install -y unzip
 
-          # Cari semua file .zip di seluruh repositori
-          find . -name "*.zip" -type f | while IFS= read -r zip_file; do
+      - name: Unzip semua file
+        run: |
+          find . -name "*.zip" -type f | while read zip_file; do
             echo "Mengekstrak $zip_file ..."
-            target_dir=$(dirname "$zip_file")
-            if unzip -o "$zip_file" -d "$target_dir"; then
-              rm "$zip_file"
-              echo "Berhasil mengekstrak dan menghapus $zip_file"
-            else
-              echo "Gagal mengekstrak $zip_file" >&2
-              exit 1
-            fi
+            dir=$(dirname "$zip_file")
+            unzip -o "$zip_file" -d "$dir"
+            rm "$zip_file"
           done
 
-          # Konfigurasi git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Commit dan push jika ada perubahan
+      - name: Commit dan push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add .
-          if git diff --staged --quiet; then
-            echo "Tidak ada perubahan untuk di-commit"
-          else
-            git commit -m "Auto extract ZIP [skip ci]"
-            git push origin HEAD:${GITHUB_REF#refs/heads/}
-          fi
+          git diff --staged --quiet || git commit -m "Auto extract ZIP [skip ci]"
+          git diff --staged --quiet || git push origin main
